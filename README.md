@@ -4,6 +4,14 @@ Token Bar is a small macOS menu bar utility for Codex usage. It reads local Code
 
 The menu also includes local token totals for the last 5 hours and 7 days, the latest Codex session total, reset times, and a manual refresh action.
 
+From the menu you can choose how the usage appears in the macOS menu bar:
+
+- Compact text: `5h 24% W 5%`
+- Donut: a thin ring with the 5-hour percent inside
+- Progress bar: a left-to-right fill meter with the 5-hour percent inside
+
+You can also switch the weekly label between short, long, or hidden, and hide reset-time rows when you want a quieter menu.
+
 ## Run During Development
 
 ```sh
