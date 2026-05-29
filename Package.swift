@@ -9,12 +9,17 @@ let package = Package(
     ],
     products: [
         .executable(name: "TokenBar", targets: ["TokenBar"]),
+        .executable(name: "tokenbar-cli", targets: ["TokenBarCLI"]),
         .library(name: "TokenBarCore", targets: ["TokenBarCore"])
     ],
     targets: [
         .target(name: "TokenBarCore"),
         .executableTarget(
             name: "TokenBar",
+            dependencies: ["TokenBarCore"]
+        ),
+        .executableTarget(
+            name: "TokenBarCLI",
             dependencies: ["TokenBarCore"]
         ),
         .testTarget(

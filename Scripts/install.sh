@@ -15,6 +15,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR"
 
 cp "$BUILD_DIR/TokenBar" "$MACOS_DIR/TokenBar"
+cp "$BUILD_DIR/tokenbar-cli" "$MACOS_DIR/tokenbar-cli"
 cp "$ROOT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 
 echo "Built $APP_DIR"
