@@ -12,6 +12,29 @@ From the menu you can choose how the usage appears in the macOS menu bar:
 
 You can also switch the weekly label between short, long, or hidden, and hide reset-time rows when you want a quieter menu.
 
+## Quick Install From GitHub
+
+After this repo is public, the easiest install path is the bootstrap script. Replace `YOUR_GITHUB_USER` with the GitHub owner for the public repo:
+
+```sh
+TOKEN_BAR_REPO=https://github.com/YOUR_GITHUB_USER/token-bar.git \
+  /bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB_USER/token-bar/main/Scripts/bootstrap.sh)"
+```
+
+That script:
+
+- clones or updates Token Bar in `~/.local/share/token-bar`
+- builds the app from source
+- installs `Token Bar.app` into `~/Applications`
+- adds a `tokenbar` CLI symlink in `~/.local/bin`
+- opens the menu bar app
+
+If `tokenbar` is not found after install, add this to your shell profile:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ## Run During Development
 
 ```sh
@@ -38,6 +61,34 @@ open "dist/Token Bar.app"
 
 The app is an `LSUIElement` menu bar app, so it appears in the macOS top bar without a Dock icon.
 
+## Install Locally From A Clone
+
+If you already cloned the repo:
+
+```sh
+Scripts/bootstrap.sh
+```
+
+For a local-only run before the repo URL is public:
+
+```sh
+TOKEN_BAR_REPO="$(pwd)" Scripts/bootstrap.sh
+```
+
+## Publish As A Public Repo
+
+1. Create a public GitHub repo named `token-bar`.
+2. Add it as this repo's remote:
+
+   ```sh
+   git remote add origin git@github.com:YOUR_GITHUB_USER/token-bar.git
+   git push -u origin main
+   ```
+
+3. In this README and [Scripts/bootstrap.sh](Scripts/bootstrap.sh), replace `YOUR_GITHUB_USER` with the actual GitHub owner.
+4. Commit and push that replacement.
+5. Share the Quick Install command above.
+
 ## Data Source
 
 Codex emits `token_count` events into local JSONL rollout files. Token Bar does not need an API key and does not send data anywhere. It only reads local files under:
@@ -61,61 +112,4 @@ You can check that state from the CLI:
 
 ```sh
 tokenbar auth
-```
-
-## Homebrew Packaging
-
-This repo includes starter templates for both install styles:
-
-- [Homebrew/Casks/token-bar.rb](Homebrew/Casks/token-bar.rb) installs the macOS app.
-- [Homebrew/Formula/tokenbar.rb](Homebrew/Formula/tokenbar.rb) installs the CLI.
-
-Before publishing, replace `YOUR_GITHUB_USER` and the placeholder SHA values in those files.
-
-### Release The App Cask
-
-1. Create a GitHub repo named `token-bar` and add it as `origin`.
-2. Commit the code, tag a release, and push it:
-
-   ```sh
-   git tag v0.1.0
-   git push origin main --tags
-   ```
-
-3. Build the release zip:
-
-   ```sh
-   Scripts/release.sh 0.1.0
-   ```
-
-4. Upload `dist/TokenBar-0.1.0.zip` to the GitHub release for `v0.1.0`.
-5. Copy the printed zip SHA into `Homebrew/Casks/token-bar.rb`.
-6. Put the cask file in a tap repo, usually `homebrew-token-bar`.
-
-Users can then install with:
-
-```sh
-brew tap YOUR_GITHUB_USER/token-bar
-brew install --cask token-bar
-open -a "Token Bar"
-tokenbar status
-```
-
-### Release The CLI Formula
-
-After the GitHub tag exists, compute the source tarball SHA:
-
-```sh
-curl -L https://github.com/YOUR_GITHUB_USER/token-bar/archive/refs/tags/v0.1.0.tar.gz | shasum -a 256
-```
-
-Copy that SHA into [Homebrew/Formula/tokenbar.rb](Homebrew/Formula/tokenbar.rb), then publish it in the same tap.
-
-Users can then install with:
-
-```sh
-brew tap YOUR_GITHUB_USER/token-bar
-brew install tokenbar
-tokenbar status
-tokenbar launch
 ```
