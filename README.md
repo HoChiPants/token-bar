@@ -12,6 +12,8 @@ From the menu you can choose how the usage appears in the macOS menu bar:
 
 You can also choose which usage window appears in any style: 5-hour, week, or both. Weekly labels can be short (`W`) or long (`Week`), and reset-time rows can be hidden when you want a quieter menu.
 
+Detailed totals, reset times, and scan counts live under the `Info` submenu so the main menu stays focused on display controls.
+
 ## Quick Install From GitHub
 
 After this repo is public, the easiest install path is the bootstrap script:

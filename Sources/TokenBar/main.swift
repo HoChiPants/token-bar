@@ -20,7 +20,7 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         }
 
         statusItem.menu = makeMenu()
-        refresh()
+        refreshUsage()
 
         timer = Timer.scheduledTimer(
             timeInterval: 60,
@@ -31,7 +31,7 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func refresh() {
+    private func refreshUsage() {
         do {
             latestSnapshot = try reader.readSnapshot()
             latestError = nil
@@ -40,6 +40,10 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
             latestError = error
         }
 
+        render()
+    }
+
+    private func render() {
         applyMenuBarPresentation()
         statusItem.button?.toolTip = menuBarToolTip()
         statusItem.menu = makeMenu()
@@ -150,29 +154,9 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         title.isEnabled = false
         menu.addItem(title)
 
-        if let snapshot = latestSnapshot {
-            addRateWindowItems(snapshot, to: menu)
-            menu.addItem(.separator())
-            menu.addItem(disabledItem("5-hour tokens: \(formatTokens(snapshot.fiveHourTokens))"))
-            menu.addItem(disabledItem("Weekly tokens: \(formatTokens(snapshot.weeklyTokens))"))
-
-            if let latest = snapshot.latestTokenUsage {
-                menu.addItem(disabledItem("Latest session total: \(formatTokens(latest.totalTokens))"))
-            }
-
-            if let lastEventDate = snapshot.lastEventDate {
-                menu.addItem(disabledItem("Last Codex event: \(formatDateTime(lastEventDate))"))
-            } else {
-                menu.addItem(disabledItem("Last Codex event: none found"))
-            }
-
-            menu.addItem(disabledItem("Files scanned: \(snapshot.filesScanned), events read: \(snapshot.eventsRead)"))
-        } else {
-            menu.addItem(disabledItem(latestError?.localizedDescription ?? "Unable to read Codex usage."))
-        }
-
-        menu.addItem(.separator())
         addAppearanceItems(to: menu)
+        menu.addItem(.separator())
+        addInfoMenu(to: menu)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshFromMenu), keyEquivalent: "r", target: self))
         menu.addItem(NSMenuItem(title: "Open Codex Folder", action: #selector(openCodexFolder), keyEquivalent: "o", target: self))
@@ -180,6 +164,35 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit Token Bar", action: #selector(quit), keyEquivalent: "q", target: self))
 
         return menu
+    }
+
+    private func addInfoMenu(to menu: NSMenu) {
+        let infoMenu = NSMenu()
+
+        if let snapshot = latestSnapshot {
+            addRateWindowItems(snapshot, to: infoMenu)
+            infoMenu.addItem(.separator())
+            infoMenu.addItem(disabledItem("5-hour tokens: \(formatTokens(snapshot.fiveHourTokens))"))
+            infoMenu.addItem(disabledItem("Weekly tokens: \(formatTokens(snapshot.weeklyTokens))"))
+
+            if let latest = snapshot.latestTokenUsage {
+                infoMenu.addItem(disabledItem("Latest session total: \(formatTokens(latest.totalTokens))"))
+            }
+
+            if let lastEventDate = snapshot.lastEventDate {
+                infoMenu.addItem(disabledItem("Last Codex event: \(formatDateTime(lastEventDate))"))
+            } else {
+                infoMenu.addItem(disabledItem("Last Codex event: none found"))
+            }
+
+            infoMenu.addItem(disabledItem("Files scanned: \(snapshot.filesScanned), events read: \(snapshot.eventsRead)"))
+        } else {
+            infoMenu.addItem(disabledItem(latestError?.localizedDescription ?? "Unable to read Codex usage."))
+        }
+
+        let infoItem = NSMenuItem(title: "Info", action: nil, keyEquivalent: "")
+        infoItem.submenu = infoMenu
+        menu.addItem(infoItem)
     }
 
     private func addRateWindowItems(_ snapshot: UsageSnapshot, to menu: NSMenu) {
@@ -260,11 +273,11 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func refreshFromMenu() {
-        refresh()
+        refreshUsage()
     }
 
     @objc private func refreshFromTimer() {
-        refresh()
+        refreshUsage()
     }
 
     @objc private func selectMenuBarStyle(_ sender: NSMenuItem) {
@@ -275,7 +288,7 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         }
 
         preferences.menuBarStyle = style
-        refresh()
+        render()
     }
 
     @objc private func selectWindowSelection(_ sender: NSMenuItem) {
@@ -286,7 +299,7 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         }
 
         preferences.windowSelection = selection
-        refresh()
+        render()
     }
 
     @objc private func selectWeekLabelStyle(_ sender: NSMenuItem) {
@@ -297,12 +310,12 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         }
 
         preferences.weekLabelStyle = style
-        refresh()
+        render()
     }
 
     @objc private func toggleResetTimes() {
         preferences.showResetTimes.toggle()
-        refresh()
+        render()
     }
 
     @objc private func openCodexFolder() {
