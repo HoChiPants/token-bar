@@ -58,21 +58,33 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
             button.title = menuBarTitle()
 
         case .donut:
-            statusItem.length = 42
+            statusItem.length = preferences.windowSelection == .both ? 76 : 42
             button.title = ""
             button.imagePosition = .imageOnly
-            button.image = MenuBarRenderer.donutImage(percent: primaryPercent)
+            button.image = MenuBarRenderer.donutImage(
+                primaryPercent: primaryPercent,
+                weeklyPercent: weeklyPercent,
+                selection: preferences.windowSelection
+            )
 
         case .bar:
-            statusItem.length = 72
+            statusItem.length = preferences.windowSelection == .both ? 86 : 72
             button.title = ""
             button.imagePosition = .imageOnly
-            button.image = MenuBarRenderer.barImage(percent: primaryPercent)
+            button.image = MenuBarRenderer.barImage(
+                primaryPercent: primaryPercent,
+                weeklyPercent: weeklyPercent,
+                selection: preferences.windowSelection
+            )
         }
     }
 
     private var primaryPercent: Double? {
         latestSnapshot?.latestRateLimits?.primary?.usedPercent
+    }
+
+    private var weeklyPercent: Double? {
+        latestSnapshot?.latestRateLimits?.secondary?.usedPercent
     }
 
     private func menuBarTitle() -> String {
@@ -82,32 +94,31 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
 
         if let primary = snapshot.latestRateLimits?.primary,
            let secondary = snapshot.latestRateLimits?.secondary {
-            return "5h \(formatPercent(primary.usedPercent))\(weekTitle(percent: secondary.usedPercent))"
+            return selectedTitle(
+                fiveHourValue: formatPercent(primary.usedPercent),
+                weeklyValue: formatPercent(secondary.usedPercent)
+            )
         }
 
-        return "5h \(formatCompactTokens(snapshot.fiveHourTokens))\(weekTitle(tokens: snapshot.weeklyTokens))"
+        return selectedTitle(
+            fiveHourValue: formatCompactTokens(snapshot.fiveHourTokens),
+            weeklyValue: formatCompactTokens(snapshot.weeklyTokens)
+        )
     }
 
-    private func weekTitle(percent: Double) -> String {
-        switch preferences.weekLabelStyle {
-        case .hidden:
-            return ""
-        case .short:
-            return " W \(formatPercent(percent))"
-        case .long:
-            return " Week \(formatPercent(percent))"
+    private func selectedTitle(fiveHourValue: String, weeklyValue: String) -> String {
+        switch preferences.windowSelection {
+        case .fiveHour:
+            return "5h \(fiveHourValue)"
+        case .week:
+            return "\(weekLabel) \(weeklyValue)"
+        case .both:
+            return "5h \(fiveHourValue) \(weekLabel) \(weeklyValue)"
         }
     }
 
-    private func weekTitle(tokens: Int) -> String {
-        switch preferences.weekLabelStyle {
-        case .hidden:
-            return ""
-        case .short:
-            return " W \(formatCompactTokens(tokens))"
-        case .long:
-            return " Week \(formatCompactTokens(tokens))"
-        }
+    private var weekLabel: String {
+        preferences.weekLabelStyle == .long ? "Week" : "W"
     }
 
     private func menuBarToolTip() -> String {
@@ -213,6 +224,18 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         styleItem.submenu = styleMenu
         menu.addItem(styleItem)
 
+        let windowMenu = NSMenu()
+        for selection in WindowSelection.allCases {
+            let item = NSMenuItem(title: selection.title, action: #selector(selectWindowSelection(_:)), keyEquivalent: "", target: self)
+            item.representedObject = selection.rawValue
+            item.state = preferences.windowSelection == selection ? .on : .off
+            windowMenu.addItem(item)
+        }
+
+        let windowItem = NSMenuItem(title: "Usage Window", action: nil, keyEquivalent: "")
+        windowItem.submenu = windowMenu
+        menu.addItem(windowItem)
+
         let weekMenu = NSMenu()
         for labelStyle in WeekLabelStyle.allCases {
             let item = NSMenuItem(title: labelStyle.title, action: #selector(selectWeekLabelStyle(_:)), keyEquivalent: "", target: self)
@@ -252,6 +275,17 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         }
 
         preferences.menuBarStyle = style
+        refresh()
+    }
+
+    @objc private func selectWindowSelection(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let selection = WindowSelection(rawValue: rawValue)
+        else {
+            return
+        }
+
+        preferences.windowSelection = selection
         refresh()
     }
 
@@ -301,7 +335,6 @@ enum MenuBarStyle: String, CaseIterable {
 enum WeekLabelStyle: String, CaseIterable {
     case short
     case long
-    case hidden
 
     var title: String {
         switch self {
@@ -309,8 +342,23 @@ enum WeekLabelStyle: String, CaseIterable {
             return "Short: W"
         case .long:
             return "Long: Week"
-        case .hidden:
-            return "Hidden"
+        }
+    }
+}
+
+enum WindowSelection: String, CaseIterable {
+    case fiveHour
+    case week
+    case both
+
+    var title: String {
+        switch self {
+        case .fiveHour:
+            return "5-hour"
+        case .week:
+            return "Week"
+        case .both:
+            return "Both"
         }
     }
 }
@@ -318,6 +366,7 @@ enum WeekLabelStyle: String, CaseIterable {
 final class TokenBarPreferences {
     private enum Key {
         static let menuBarStyle = "menuBarStyle"
+        static let windowSelection = "windowSelection"
         static let weekLabelStyle = "weekLabelStyle"
         static let showResetTimes = "showResetTimes"
     }
@@ -328,6 +377,7 @@ final class TokenBarPreferences {
         self.defaults = defaults
         defaults.register(defaults: [
             Key.menuBarStyle: MenuBarStyle.compactText.rawValue,
+            Key.windowSelection: WindowSelection.both.rawValue,
             Key.weekLabelStyle: WeekLabelStyle.short.rawValue,
             Key.showResetTimes: true
         ])
@@ -339,6 +389,15 @@ final class TokenBarPreferences {
         }
         set {
             defaults.set(newValue.rawValue, forKey: Key.menuBarStyle)
+        }
+    }
+
+    var windowSelection: WindowSelection {
+        get {
+            WindowSelection(rawValue: defaults.string(forKey: Key.windowSelection) ?? "") ?? .both
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Key.windowSelection)
         }
     }
 
@@ -362,21 +421,52 @@ final class TokenBarPreferences {
 }
 
 enum MenuBarRenderer {
-    static func donutImage(percent: Double?) -> NSImage {
-        let size = NSSize(width: 34, height: 22)
+    static func donutImage(primaryPercent: Double?, weeklyPercent: Double?, selection: WindowSelection) -> NSImage {
+        let values = selectedValues(primaryPercent: primaryPercent, weeklyPercent: weeklyPercent, selection: selection)
+        let size = NSSize(width: values.count == 2 ? 68 : 34, height: 22)
         let image = NSImage(size: size)
 
         image.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
 
-        let clamped = clampPercent(percent)
-        let ringRect = NSRect(x: 7, y: 2, width: 18, height: 18)
+        for (index, value) in values.enumerated() {
+            let originX = values.count == 2 ? CGFloat(index * 34) : 0
+            drawDonut(value, originX: originX)
+        }
+
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    static func barImage(primaryPercent: Double?, weeklyPercent: Double?, selection: WindowSelection) -> NSImage {
+        let values = selectedValues(primaryPercent: primaryPercent, weeklyPercent: weeklyPercent, selection: selection)
+        let size = NSSize(width: values.count == 2 ? 82 : 64, height: values.count == 2 ? 20 : 18)
+        let image = NSImage(size: size)
+
+        image.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+
+        if values.count == 2 {
+            drawBar(values[0], trackRect: NSRect(x: 17, y: 11, width: 62, height: 7), labelPrefix: "5h")
+            drawBar(values[1], trackRect: NSRect(x: 17, y: 2, width: 62, height: 7), labelPrefix: "W")
+        } else {
+            drawBar(values[0], trackRect: NSRect(x: 3, y: 4, width: 58, height: 10), labelPrefix: nil)
+        }
+
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    private static func drawDonut(_ value: DisplayValue, originX: CGFloat) {
+        let ringRect = NSRect(x: originX + 7, y: 2, width: 18, height: 18)
         let center = NSPoint(x: ringRect.midX, y: ringRect.midY)
         let radius = ringRect.width / 2
 
-        drawRing(center: center, radius: radius, lineWidth: 2.2, percent: clamped)
+        drawRing(center: center, radius: radius, lineWidth: 2.2, percent: clampPercent(value.percent))
 
-        let label = percentLabel(percent)
+        let label = percentLabel(value.percent)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: label.count > 3 ? 5.8 : 6.6, weight: .semibold),
             .foregroundColor: NSColor.labelColor
@@ -386,21 +476,10 @@ enum MenuBarRenderer {
             at: NSPoint(x: center.x - labelSize.width / 2, y: center.y - labelSize.height / 2 - 0.2),
             withAttributes: attributes
         )
-
-        image.unlockFocus()
-        image.isTemplate = false
-        return image
     }
 
-    static func barImage(percent: Double?) -> NSImage {
-        let size = NSSize(width: 64, height: 18)
-        let image = NSImage(size: size)
-
-        image.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-
-        let clamped = clampPercent(percent)
-        let trackRect = NSRect(x: 3, y: 4, width: 58, height: 10)
+    private static func drawBar(_ value: DisplayValue, trackRect: NSRect, labelPrefix: String?) {
+        let clamped = clampPercent(value.percent)
         let radius = trackRect.height / 2
         let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius)
 
@@ -420,9 +499,20 @@ enum MenuBarRenderer {
         trackPath.lineWidth = 0.6
         trackPath.stroke()
 
-        let label = percentLabel(percent)
+        if let labelPrefix {
+            let prefixAttributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 6.2, weight: .semibold),
+                .foregroundColor: NSColor.labelColor.withAlphaComponent(0.72)
+            ]
+            labelPrefix.draw(
+                at: NSPoint(x: 2, y: trackRect.midY - 3.7),
+                withAttributes: prefixAttributes
+            )
+        }
+
+        let label = percentLabel(value.percent)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 7, weight: .semibold),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: trackRect.height < 8 ? 5.8 : 7, weight: .semibold),
             .foregroundColor: NSColor.labelColor
         ]
         let labelSize = label.size(withAttributes: attributes)
@@ -430,10 +520,6 @@ enum MenuBarRenderer {
             at: NSPoint(x: trackRect.midX - labelSize.width / 2, y: trackRect.midY - labelSize.height / 2 - 0.1),
             withAttributes: attributes
         )
-
-        image.unlockFocus()
-        image.isTemplate = false
-        return image
     }
 
     private static func drawRing(center: NSPoint, radius: CGFloat, lineWidth: CGFloat, percent: Double) {
@@ -477,6 +563,29 @@ enum MenuBarRenderer {
         }
         return "\(Int(percent.rounded()))%"
     }
+
+    private static func selectedValues(
+        primaryPercent: Double?,
+        weeklyPercent: Double?,
+        selection: WindowSelection
+    ) -> [DisplayValue] {
+        switch selection {
+        case .fiveHour:
+            return [DisplayValue(label: "5h", percent: primaryPercent)]
+        case .week:
+            return [DisplayValue(label: "W", percent: weeklyPercent)]
+        case .both:
+            return [
+                DisplayValue(label: "5h", percent: primaryPercent),
+                DisplayValue(label: "W", percent: weeklyPercent)
+            ]
+        }
+    }
+}
+
+private struct DisplayValue {
+    var label: String
+    var percent: Double?
 }
 
 private extension NSMenuItem {

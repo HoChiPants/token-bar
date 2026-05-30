@@ -1,12 +1,16 @@
 #!/bin/sh
 set -eu
 
-DEFAULT_REPO_URL="https://github.com/YOUR_GITHUB_USER/token-bar.git"
+DEFAULT_REPO_URL="https://github.com/HoChiPants/token-bar.git"
 REPO_URL="${TOKEN_BAR_REPO:-$DEFAULT_REPO_URL}"
 INSTALL_ROOT="${TOKEN_BAR_INSTALL_ROOT:-$HOME/.local/share/token-bar}"
 APP_TARGET_DIR="${TOKEN_BAR_APP_DIR:-$HOME/Applications}"
 BIN_TARGET_DIR="${TOKEN_BAR_BIN_DIR:-$HOME/.local/bin}"
 SHOULD_OPEN="${TOKEN_BAR_OPEN:-1}"
+
+if [ -z "${TOKEN_BAR_REPO+x}" ] && [ -f "Package.swift" ] && [ -d "Sources/TokenBar" ]; then
+  REPO_URL=$(pwd)
+fi
 
 if printf "%s" "$REPO_URL" | grep -q "YOUR_GITHUB_USER"; then
   if [ -f "Package.swift" ] && [ -d "Sources/TokenBar" ]; then
