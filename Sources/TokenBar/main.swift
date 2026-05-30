@@ -10,6 +10,7 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var latestSnapshot: UsageSnapshot?
     private var latestError: Error?
+    private var updateState: UpdateState = .idle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -158,6 +159,9 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         addInfoMenu(to: menu)
         menu.addItem(.separator())
+        let updateItem = NSMenuItem(title: updateMenuTitle, action: #selector(updateTokenBar), keyEquivalent: "u", target: self)
+        updateItem.isEnabled = !updateState.isRunning
+        menu.addItem(updateItem)
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshFromMenu), keyEquivalent: "r", target: self))
         menu.addItem(NSMenuItem(title: "Open Codex Folder", action: #selector(openCodexFolder), keyEquivalent: "o", target: self))
         menu.addItem(.separator())
@@ -188,6 +192,11 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
             infoMenu.addItem(disabledItem("Files scanned: \(snapshot.filesScanned), events read: \(snapshot.eventsRead)"))
         } else {
             infoMenu.addItem(disabledItem(latestError?.localizedDescription ?? "Unable to read Codex usage."))
+        }
+
+        if let status = updateState.infoText {
+            infoMenu.addItem(.separator())
+            infoMenu.addItem(disabledItem(status))
         }
 
         let infoItem = NSMenuItem(title: "Info", action: nil, keyEquivalent: "")
@@ -272,6 +281,15 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
         return item
     }
 
+    private var updateMenuTitle: String {
+        switch updateState {
+        case .idle, .succeeded, .failed:
+            return "Update Token Bar"
+        case .running:
+            return "Updating..."
+        }
+    }
+
     @objc private func refreshFromMenu() {
         refreshUsage()
     }
@@ -316,6 +334,96 @@ final class TokenBarApp: NSObject, NSApplicationDelegate {
     @objc private func toggleResetTimes() {
         preferences.showResetTimes.toggle()
         render()
+    }
+
+    @objc private func updateTokenBar() {
+        guard !updateState.isRunning else {
+            return
+        }
+
+        let installRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/share/token-bar", isDirectory: true)
+        let bootstrap = installRoot.appendingPathComponent("Scripts/bootstrap.sh")
+
+        guard FileManager.default.fileExists(atPath: bootstrap.path) else {
+            updateState = .failed("Install source not found. Reinstall with the bootstrap script first.")
+            render()
+            return
+        }
+
+        updateState = .running
+        render()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["Scripts/bootstrap.sh"]
+        process.currentDirectoryURL = installRoot
+        process.environment = updateEnvironment()
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        process.terminationHandler = { [weak self] finishedProcess in
+            let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+
+            Task { @MainActor in
+                self?.finishUpdate(status: finishedProcess.terminationStatus, output: output)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            updateState = .failed(error.localizedDescription)
+            render()
+        }
+    }
+
+    private func updateEnvironment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["TOKEN_BAR_OPEN"] = "0"
+        environment["TOKEN_BAR_INSTALL_ROOT"] = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/share/token-bar", isDirectory: true)
+            .path
+        environment["TOKEN_BAR_APP_DIR"] = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications", isDirectory: true)
+            .path
+        environment["TOKEN_BAR_BIN_DIR"] = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/bin", isDirectory: true)
+            .path
+        return environment
+    }
+
+    private func finishUpdate(status: Int32, output: String) {
+        if status == 0 {
+            updateState = .succeeded
+            render()
+            relaunchAfterUpdate()
+        } else {
+            updateState = .failed(lastMeaningfulLine(in: output) ?? "Update failed with status \(status).")
+            render()
+        }
+    }
+
+    private func relaunchAfterUpdate() {
+        let appPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications/Token Bar.app")
+            .path
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "sleep 0.6; open \(shellQuoted(appPath))"]
+
+        try? process.run()
+        NSApp.terminate(nil)
+    }
+
+    private func lastMeaningfulLine(in output: String) -> String? {
+        output
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .last { !$0.isEmpty }
     }
 
     @objc private func openCodexFolder() {
@@ -372,6 +480,33 @@ enum WindowSelection: String, CaseIterable {
             return "Week"
         case .both:
             return "Both"
+        }
+    }
+}
+
+enum UpdateState {
+    case idle
+    case running
+    case succeeded
+    case failed(String)
+
+    var isRunning: Bool {
+        if case .running = self {
+            return true
+        }
+        return false
+    }
+
+    var infoText: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .running:
+            return "Update: running"
+        case .succeeded:
+            return "Update: complete"
+        case let .failed(message):
+            return "Update failed: \(message)"
         }
     }
 }
@@ -640,6 +775,10 @@ private func formatReset(_ date: Date?) -> String {
 
 private func formatDateTime(_ date: Date) -> String {
     DateFormatter.menuDateTimeFormatter.string(from: date)
+}
+
+private func shellQuoted(_ value: String) -> String {
+    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
 }
 
 private extension NumberFormatter {

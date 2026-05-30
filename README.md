@@ -14,6 +14,8 @@ You can also choose which usage window appears in any style: 5-hour, week, or bo
 
 Detailed totals, reset times, and scan counts live under the `Info` submenu so the main menu stays focused on display controls.
 
+Use `Update Token Bar` from the menu to pull the latest public repo changes, rebuild, reinstall, and relaunch the app.
+
 ## Quick Install From GitHub
 
 After this repo is public, the easiest install path is the bootstrap script:
