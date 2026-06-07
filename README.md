@@ -41,6 +41,22 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Run During Development
 
+### Start From Anywhere
+
+After the one-time bootstrap has installed the `tokenbar` CLI in `~/.local/bin`, you can launch the installed menu bar app from any directory:
+
+```bash
+tokenbar launch
+```
+
+On Austin's Mac, the local `start` helper also supports the shorter command:
+
+```bash
+start token-bar
+```
+
+Open a new Terminal window after adding a new helper so zsh reloads `~/.local/bin` from `~/.zshrc`. In an already-open shell, run `source ~/.zshrc` once.
+
 ```sh
 swift run TokenBar
 ```
